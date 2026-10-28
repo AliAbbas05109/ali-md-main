@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0a0f">
+<title>ALI MD | Pairing Code</title>
+<style>
+  :root{--bg:#0a0a0f;--card:#14141d;--line:#262636;--text:#eef0f6;--mute:#8b8fa3;--acc:#25d366;--acc2:#128c7e;--err:#ff5d5d}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;
+    background:radial-gradient(900px 500px at 50% -10%,#16233a 0%,var(--bg) 60%);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .card{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 22px;box-shadow:0 20px 60px #0008}
+  h1{margin:0 0 4px;text-align:center;font-size:28px;letter-spacing:2px}
+  .sub{text-align:center;color:var(--mute);margin:0 0 22px;font-size:14px}
+  label{display:block;font-size:13px;color:var(--mute);margin-bottom:6px}
+  input{width:100%;padding:14px;border-radius:12px;border:1px solid var(--line);background:#0e0e16;color:var(--text);font-size:17px;outline:none}
+  input:focus{border-color:var(--acc)}
+  .hint{font-size:12px;color:var(--mute);margin:6px 0 16px}
+  button{width:100%;padding:14px;border:0;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;color:#04140a;
+    background:linear-gradient(135deg,var(--acc),#7dffb0)}
+  button:disabled{opacity:.6;cursor:wait}
+  .consent{font-size:12px;color:var(--mute);margin-top:14px;line-height:1.5}
+  #out{display:none;margin-top:20px;text-align:center}
+  .code{font-size:34px;font-weight:800;letter-spacing:6px;padding:16px;border:1px dashed var(--acc);border-radius:14px;background:#0e0e16;user-select:all}
+  .row{display:flex;gap:10px;margin-top:12px}
+  .row button{background:#1d1d2b;color:var(--text);border:1px solid var(--line)}
+  .timer{color:var(--mute);font-size:13px;margin-top:10px}
+  .steps{text-align:left;font-size:13px;color:var(--mute);margin-top:14px;line-height:1.7}
+  .msg{margin-top:14px;font-size:14px;text-align:center}
+  .err{color:var(--err)} .ok{color:var(--acc)}
+  footer{text-align:center;color:var(--mute);font-size:12px;margin-top:18px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>ALI MD</h1>
+  <p class="sub">WhatsApp Bot — Pairing Code Generator</p>
+
+  <label for="num">WhatsApp Number</label>
+  <input id="num" type="tel" inputmode="numeric" placeholder="923001234567" autocomplete="tel">
+  <div class="hint">Include the country code, without + (Pakistan = 92)</div>
+  <button id="go">Generate Pair Code</button>
+  <div class="consent">Only enter your own number. Once linked, the bot runs on this WhatsApp account. To remove it, log out from WhatsApp → Linked Devices.</div>
+
+  <div id="out">
+    <div class="code" id="code">----</div>
+    <div class="timer" id="timer"></div>
+    <div class="row"><button id="copy">Copy</button><button id="retry">Retry</button></div>
+    <div class="steps">1. Open WhatsApp → Settings → Linked Devices<br>2. Link a Device → <b>Link with phone number instead</b><br>3. Enter this code</div>
+  </div>
+  <div class="msg" id="msg"></div>
+  <footer>© 2026 ALI MD</footer>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let tick = null, poll = null;
+
+function say(text, cls) { $("msg").className = "msg " + (cls || ""); $("msg").textContent = text || ""; }
+function stopTimers() { clearInterval(tick); clearInterval(poll); }
+
+async function generate() {
+  const number = $("num").value.replace(/\D/g, "");
+  stopTimers(); say(""); $("out").style.display = "none";
+  if (number.length < 8) return say("Enter a valid number.", "err");
+  $("go").disabled = true; $("go").textContent = "Generating code...";
+  try {
+    const r = await (await fetch("/api/pair?number=" + number)).json();
+    if (r.error) return say(r.error, "err");
+    if (r.status === "connected" || r.status === "already_linked") return say("✅ This number is already linked and the bot is running.", "ok");
+    $("code").textContent = r.code;
+    $("out").style.display = "block";
+    let left = 120;
+    $("timer").textContent = "Enter it quickly — the code expires soon";
+    tick = setInterval(() => { left--; if (left <= 0) { stopTimers(); $("timer").textContent = "Code expired. Press Retry."; } }, 1000);
+    poll = setInterval(async () => {
+      try {
+        const s = await (await fetch("/api/status?number=" + number)).json();
+        if (s.connected) { stopTimers(); $("out").style.display = "none"; say("✅ Bot connected! Send .menu on WhatsApp to test it.", "ok"); }
+      } catch {}
+    }, 3000);
+  } catch { say("Could not reach the server.", "err"); }
+  finally { $("go").disabled = false; $("go").textContent = "Generate Pair Code"; }
+}
+
+$("go").onclick = generate;
+$("retry").onclick = generate;
+$("num").addEventListener("keydown", (e) => { if (e.key === "Enter") generate(); });
+$("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText($("code").textContent.replace(/-/g, "")); say("Code copied ✅", "ok"); }
+  catch { say("Press and hold the code to copy it.", "err"); }
+};
+</script>
+</body>
+</html>
